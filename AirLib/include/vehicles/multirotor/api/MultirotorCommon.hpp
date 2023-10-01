@@ -45,7 +45,58 @@ namespace airlib
         }
     };
 
+
     struct RotorStates
+    //what is the +/-window we should check on obstacle map?
+    //for example 2 means check from ticks -2 to 2
+    int obs_window = 0;
+};
+
+struct TripStats{
+    float state_of_charge;
+    float voltage;
+    float energy_consumed;
+    float flight_time;
+    float distance_traveled;
+    int collision_count;  
+    
+    TripStats()
+    {}
+    
+    TripStats(float state_of_charge_val,
+                float voltage_val,
+                float energy_consumed_val,
+                float flight_time_val,
+                float distance_traveled_val,
+                int collision_count_val):
+        state_of_charge(state_of_charge_val), 
+        voltage(voltage_val), 
+        energy_consumed(energy_consumed_val), 
+        flight_time(flight_time_val), 
+        distance_traveled(distance_traveled_val),
+        collision_count(collision_count_val)
+    {
+    }
+
+};
+
+struct MultirotorState {
+    CollisionInfo collision;
+    Kinematics::State kinematics_estimated;
+    GeoPoint gps_location;
+    uint64_t timestamp;
+    LandedState landed_state;
+    RCData rc_data;
+    TripStats trip_stats;
+
+    MultirotorState()
+    {}
+    MultirotorState(const CollisionInfo& collision_val, const Kinematics::State& kinematics_estimated_val, 
+        const GeoPoint& gps_location_val, uint64_t timestamp_val,
+        LandedState landed_state_val, const RCData& rc_data_val, const TripStats& trip_stats)
+        : collision(collision_val), kinematics_estimated(kinematics_estimated_val),
+        gps_location(gps_location_val), timestamp(timestamp_val),
+        landed_state(landed_state_val), rc_data(rc_data_val), trip_stats(trip_stats)
     {
         std::vector<RotorParameters> rotors;
         uint64_t timestamp;
@@ -146,4 +197,20 @@ namespace airlib
     };
 }
 } //namespace
+#endif
+    //shortcuts
+    const Vector3r& getPosition() const
+    {
+        return kinematics_estimated.pose.position;
+    }
+    const Quaternionr& getOrientation() const
+    {
+        return kinematics_estimated.pose.orientation;
+    }
+    const TripStats& getTripStats() const{
+        return trip_stats;
+    }
+};
+
+}} //namespace
 #endif

@@ -264,6 +264,36 @@ __pragma(warning(disable : 4239))
 
             return this;
         }
+/*
+IMUStats MultirotorRpcLibClient::getIMUStats()
+{
+    return static_cast<rpc::client*>(getClient())->call("getIMUStats").as<MultirotorRpcLibAdapators::IMUStats>().to();
+}
+*/
+TripStats MultirotorRpcLibClient::getTripStats()
+{
+    return static_cast<rpc::client*>(getClient())->call("getTripStats").as<MultirotorRpcLibAdapators::TripStats>().to();
+}
+/*
+GPSStats MultirotorRpcLibClient::getGPSStats()
+{
+	return static_cast<rpc::client*>(getClient())->call("getGPSStats").as<MultirotorRpcLibAdapators::GPSStats>().to();
+}
+*/
+
+//return value of last task. It should be true if task completed without
+//cancellation or timeout
+MultirotorRpcLibClient* MultirotorRpcLibClient::waitOnLastTask(bool* task_result, float timeout_sec)
+{
+    bool result;
+    if (std::isnan(timeout_sec) || timeout_sec == Utils::max<float>())
+        result = pimpl_->last_future.get().as<bool>();
+    else {
+        auto future_status = pimpl_->last_future.wait_for(std::chrono::duration<double>(timeout_sec));
+        if (future_status == std::future_status::ready)
+            result = pimpl_->last_future.get().as<bool>();
+        else
+            result = false;
     }
 } //namespace
 

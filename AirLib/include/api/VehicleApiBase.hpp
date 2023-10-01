@@ -194,6 +194,7 @@ Some methods may not be applicable to specific vehicle in which case an exceptio
             }
         };
 
+
         class VehicleMoveException : public VehicleControllerException
         {
         public:
@@ -202,6 +203,9 @@ Some methods may not be applicable to specific vehicle in which case an exceptio
             {
             }
         };
+
+    /************* battery info is propagated similar to collision info ********/
+    virtual ~VehicleApiBase() = default;
 
     private:
         const SensorBase* findSensorByName(const std::string& sensor_name, const SensorBase::SensorType type) const
@@ -222,6 +226,22 @@ Some methods may not be applicable to specific vehicle in which case an exceptio
             return sensor;
         }
     };
-}
-} //namespace
+
+
+    class VehicleCommandNotImplementedException : public VehicleControllerException {
+    public:
+        VehicleCommandNotImplementedException(const std::string& message)
+            : VehicleControllerException(message) {
+        }
+    };
+
+    class VehicleMoveException : public VehicleControllerException {
+    public:
+        VehicleMoveException(const std::string& message)
+            : VehicleControllerException(message) {
+        }
+    };
+};
+
+}} //namespace
 #endif

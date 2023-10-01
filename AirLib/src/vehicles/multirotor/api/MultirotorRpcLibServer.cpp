@@ -85,6 +85,48 @@ namespace airlib
             return getVehicleApi(vehicle_name)->moveByVelocityZ(vx, vy, z, duration, drivetrain, yaw_mode.to());
         });
         (static_cast<rpc::server*>(getServer()))->bind("moveOnPath", [&](const vector<MultirotorRpcLibAdaptors::Vector3r>& path, float velocity, float timeout_sec, DrivetrainType drivetrain, const MultirotorRpcLibAdaptors::YawMode& yaw_mode, float lookahead, float adaptive_lookahead, const std::string& vehicle_name) -> bool {
+
+    (static_cast<rpc::server*>(getServer()))->
+        bind("takeoff", [&](float timeout_sec, const std::string& vehicle_name) -> bool { 
+        return getVehicleApi(vehicle_name)->takeoff(timeout_sec); 
+    });
+    (static_cast<rpc::server*>(getServer()))->
+        bind("land", [&](float timeout_sec, const std::string& vehicle_name) -> bool { 
+        return getVehicleApi(vehicle_name)->land(timeout_sec); 
+    });
+    (static_cast<rpc::server*>(getServer()))->
+        bind("goHome", [&](float timeout_sec, const std::string& vehicle_name) -> bool { 
+        return getVehicleApi(vehicle_name)->goHome(timeout_sec); 
+    });
+    
+    (static_cast<rpc::server*>(getServer()))->
+        bind("getTripStats", [&](const std::string& vehicle_name) -> MultirotorRpcLibAdapators::TripStats { return getVehicleApi(vehicle_name)->getTripStats(); });
+   /*
+    (static_cast<rpc::server*>(getServer()))->
+        bind("getIMUStats", [&](const std::string& vehicle_name) -> MultirotorRpcLibAdapators::IMUStats { return getVehicleApi(vehicle_name)->getIMUStats(); });
+   */
+    
+    (static_cast<rpc::server*>(getServer()))->
+        bind("moveByAngleZ", [&](float pitch, float roll, float z, float yaw, float duration, const std::string& vehicle_name) ->
+        bool { return getVehicleApi(vehicle_name)->moveByAngleZ(pitch, roll, z, yaw, duration); });
+    (static_cast<rpc::server*>(getServer()))->
+        bind("moveByAngleThrottle", [&](float pitch, float roll, float throttle, float yaw_rate, float duration, 
+            const std::string& vehicle_name) -> bool { 
+                return getVehicleApi(vehicle_name)->moveByAngleThrottle(pitch, roll, throttle, yaw_rate, duration); 
+    });
+    (static_cast<rpc::server*>(getServer()))->
+        bind("moveByVelocity", [&](float vx, float vy, float vz, float duration, DrivetrainType drivetrain, 
+            const MultirotorRpcLibAdapators::YawMode& yaw_mode, const std::string& vehicle_name) -> bool { 
+        return getVehicleApi(vehicle_name)->moveByVelocity(vx, vy, vz, duration, drivetrain, yaw_mode.to()); 
+    });
+    (static_cast<rpc::server*>(getServer()))->
+        bind("moveByVelocityZ", [&](float vx, float vy, float z, float duration, DrivetrainType drivetrain, 
+            const MultirotorRpcLibAdapators::YawMode& yaw_mode, const std::string& vehicle_name) -> bool {
+            return getVehicleApi(vehicle_name)->moveByVelocityZ(vx, vy, z, duration, drivetrain, yaw_mode.to()); 
+    });
+    (static_cast<rpc::server*>(getServer()))->
+        bind("moveOnPath", [&](const vector<MultirotorRpcLibAdapators::Vector3r>& path, float velocity, float timeout_sec, DrivetrainType drivetrain, const MultirotorRpcLibAdapators::YawMode& yaw_mode,
+        float lookahead, float adaptive_lookahead, const std::string& vehicle_name) -> bool {
             vector<Vector3r> conv_path;
             MultirotorRpcLibAdaptors::to(path, conv_path);
             return getVehicleApi(vehicle_name)->moveOnPath(conv_path, velocity, timeout_sec, drivetrain, yaw_mode.to(), lookahead, adaptive_lookahead);

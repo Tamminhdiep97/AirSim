@@ -20,7 +20,42 @@ namespace msr
 namespace airlib
 {
 
+
     class MultirotorApiBase : public VehicleApiBase
+
+namespace msr { namespace airlib {
+
+class MultirotorApiBase : public VehicleApiBase {
+
+protected: //must be implemented
+
+    /************************* low level move APIs *********************************/
+    virtual void commandRollPitchZ(float pitch, float roll, float z, float yaw) = 0;
+    virtual void commandRollPitchThrottle(float pitch, float roll, float throttle, float yaw_rate) = 0;
+    virtual void commandVelocity(float vx, float vy, float vz, const YawMode& yaw_mode) = 0;
+    virtual void commandVelocityZ(float vx, float vy, float z, const YawMode& yaw_mode) = 0;
+    virtual void commandPosition(float x, float y, float z, const YawMode& yaw_mode) = 0;
+
+    /************************* State APIs *********************************/
+    virtual Kinematics::State getKinematicsEstimated() const = 0;
+    virtual LandedState getLandedState() const = 0;
+    virtual GeoPoint getGpsLocation() const = 0;
+    virtual const MultirotorApiParams& getMultirotorApiParams() const = 0;
+    /************************* basic config APIs *********************************/
+    virtual float getCommandPeriod() const = 0; //time between two command required for drone in seconds
+    virtual float getTakeoffZ() const = 0;  // the height above ground for the drone after successful takeoff (Z above ground is negative due to NED coordinate system).
+    //noise in difference of two position coordinates. This is not GPS or position accuracy which can be very low such as 1m.
+    //the difference between two position cancels out transitional errors. Typically this would be 0.1m or lower.
+    virtual float getDistanceAccuracy() const = 0; 
+
+protected: //optional overrides but recommended, default values may work
+    virtual float getAutoLookahead(float velocity, float adaptive_lookahead,
+        float max_factor = 40, float min_factor = 30) const;
+    virtual float getObsAvoidanceVelocity(float risk_dist, float max_obs_avoidance_vel) const;
+
+    //below methods gets called by default implementations of move-related commands that would use a long 
+    //running loop. These can be used by derived classes to do some init/cleanup.
+    virtual void beforeTask()
     {
 
     protected: //must be implemented
@@ -36,8 +71,25 @@ namespace airlib
         virtual void commandVelocityZ(float vx, float vy, float z, const YawMode& yaw_mode) = 0;
         virtual void commandPosition(float x, float y, float z, const YawMode& yaw_mode) = 0;
 
+
         /************************* set Controller Gains APIs *********************************/
         virtual void setControllerGains(uint8_t controllerType, const vector<float>& kp, const vector<float>& ki, const vector<float>& kd) = 0;
+    virtual void setTripStats(const TripStats& trip_stats) {
+        trip_stats_ = trip_stats;     
+        //TripStats;
+    }
+    
+    virtual const TripStats getTripStats() const{
+        return trip_stats_; 
+    }
+    
+    //below method exist for any firmwares that may want to use ground truth for debugging purposes
+    virtual void setSimulatedGroundTruth(const Kinematics::State* kinematics, const Environment* environment)
+    {
+        unused(kinematics);
+        unused(environment);
+    }
+
 
         /************************* State APIs *********************************/
         virtual Kinematics::State getKinematicsEstimated() const = 0;
@@ -79,6 +131,19 @@ namespace airlib
         }
 
         virtual void resetImplementation() override;
+    /************************* high level status APIs *********************************/
+    MultirotorState getMultirotorState() const
+    {
+        MultirotorState state;
+        state.kinematics_estimated = getKinematicsEstimated();
+        //TODO: add GPS health, accuracy in API
+        state.gps_location = getGpsLocation();
+        state.timestamp = clock()->nowNanos();
+        state.landed_state = getLandedState();
+        state.rc_data = getRCData();
+        state.trip_stats = getTripStats();
+        return state;
+    }
 
     public: //these APIs uses above low level APIs
         virtual ~MultirotorApiBase() = default;
@@ -120,10 +185,18 @@ namespace airlib
         virtual void setVelocityControllerGains(const vector<float>& kp, const vector<float>& ki, const vector<float>& kd);
         virtual void setPositionControllerGains(const vector<float>& kp, const vector<float>& ki, const vector<float>& kd);
 
+
         /************************* Safety APIs *********************************/
         virtual void setSafetyEval(const shared_ptr<SafetyEval> safety_eval_ptr);
         virtual bool setSafety(SafetyEval::SafetyViolationType enable_reasons, float obs_clearance, SafetyEval::ObsAvoidanceStrategy obs_startegy,
                                float obs_avoidance_vel, const Vector3r& origin, float xy_length, float max_z, float min_z);
+
+    
+    /************* wait helpers ************/
+    // helper function can wait for anything (as defined by the given function) up to the max_wait duration (in seconds).
+    // returns true if the wait function succeeded, or false if timeout occurred or the timeout is invalid.
+    Waiter waitForFunction(WaitFunction function, float max_wait);
+
 
         /************************* high level status APIs *********************************/
         const RotorStates& getRotorStates() const
@@ -145,6 +218,7 @@ namespace airlib
             return state;
         }
 
+
         /******************* Task management Apis ********************/
         virtual void cancelLastTask() override
         {
@@ -156,6 +230,18 @@ namespace airlib
         {
             rotor_states_ = rotor_states;
         }
+
+    CancelToken& getCancelToken()
+    {
+        return token_;
+    }
+   
+        
+public: //types
+    class UnsafeMoveException : public VehicleMoveException {
+    public:
+        const SafetyEval::EvalResult result;
+
 
     protected: //utility methods
         typedef std::function<bool()> WaitFunction;
@@ -366,6 +452,29 @@ namespace airlib
         float approx_zero_angular_vel_ = 0.01f;
         RotorStates rotor_states_;
     };
-}
-} //namespace
+
+
+private: //methods
+    float setNextPathPosition(const vector<Vector3r>& path, const vector<PathSegment>& path_segs,
+        const PathPosition& cur_path_loc, float next_dist, PathPosition& next_path_loc);
+    void adjustYaw(const Vector3r& heading, DrivetrainType drivetrain, YawMode& yaw_mode);
+    void adjustYaw(float x, float y, DrivetrainType drivetrain, YawMode& yaw_mode);
+    void moveToPathPosition(const Vector3r& dest, float velocity, DrivetrainType drivetrain, /* pass by value */ YawMode yaw_mode, float last_z);
+    bool isYawWithinMargin(float yaw_target, float margin) const;
+
+private: //variables
+    CancelToken token_;
+    std::recursive_mutex status_mutex_;
+    RCData rc_data_trims_;
+    shared_ptr<SafetyEval> safety_eval_ptr_;
+    float obs_avoidance_vel_ = 0.5f;
+
+    //TODO: make this configurable?
+    float landing_vel_ = 0.2f; //velocity to use for landing
+    float approx_zero_vel_ = 0.05f;
+
+    TripStats trip_stats_; 
+};
+
+}} //namespace
 #endif

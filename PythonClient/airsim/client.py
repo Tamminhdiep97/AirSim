@@ -9,6 +9,8 @@ import msgpack
 import time
 import math
 import logging
+import airsim
+
 
 class VehicleClient:
     def __init__(self, ip = "", port = 41451, timeout_value = 3600):
@@ -16,7 +18,38 @@ class VehicleClient:
             ip = "127.0.0.1"
         self.client = msgpackrpc.Client(msgpackrpc.Address(ip, port), timeout = timeout_value, pack_encoding = 'utf-8', unpack_encoding = 'utf-8')
 
-#----------------------------------- Common vehicle APIs ---------------------------------------------
+        
+    # -----------------------------------  Common vehicle APIs ---------------------------------------------
+
+    @staticmethod
+    def toEulerianAngle(q):
+        z = q.z_val
+        y = q.y_val
+        x = q.x_val
+        w = q.w_val
+        ysqr = y * y
+
+        # roll (x-axis rotation)
+        t0 = +2.0 * (w * x + y * z)
+        t1 = +1.0 - 2.0 * (x * x + ysqr)
+        roll = math.atan2(t0, t1)
+
+        # pitch (y-axis rotation)
+        t2 = +2.0 * (w * y - z * x)
+        if (t2 > 1.0):
+            t2 = 1
+        if (t2 < -1.0):
+            t2 = -1.0
+        pitch = math.asin(t2)
+
+        # yaw (z-axis rotation)
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (ysqr + z * z)
+        yaw = math.atan2(t3, t4)
+
+        return (pitch, roll, yaw)
+
+
     def reset(self):
         """
         Reset the vehicle to its original starting state
@@ -24,7 +57,24 @@ class VehicleClient:
         Note that you must call `enableApiControl` and `armDisarm` again after the call to reset
         """
         self.client.call('reset')
+    
+    def resetUnreal(self, sleep_time_before =.1, sleep_time_after=.1):
+        time.sleep(sleep_time_before)  #not sure why we need this, but sometimes
+                                       #we do
+        self.client.call('resetUnreal')
+        time.sleep(sleep_time_after) #this is necessary because resetUnreal is done
+                              #through setting a local variable through RPC
+                              #and later reacting to it in SimMode
+                              #which means other rpc calls might take effect
+                              #before reset. Hence to ensure the order, we need 
+                              # an extra sleep. With Behzad machines
+                              # it seems like 30 ms is enough sleep time
+                              # althought sometimes it needs 300 ms!!!!
 
+        client = airsim.MultirotorClient(ip="127.0.0.1")
+        client.enableApiControl(True)
+        return client
+    
     def ping(self):
         """
         If connection is established then this call will return true otherwise it will be blocked until timeout
@@ -918,6 +968,71 @@ class VehicleClient:
         """
         logging.warning("simGetLidarSegmentation API is deprecated, use getLidarData() API instead")
         return self.getLidarData(lidar_name, vehicle_name).segmentation
+ 
+    # legacy handling
+    # TODO: remove below legacy wrappers in future major releases
+    upgrade_api_help = ""
+    def simGetPose(self):
+        #logging.warning("simGetPose API is renamed to simGetVehiclePose. Please update your code." + self.upgrade_api_help)
+        return self.simGetVehiclePose()
+    def simSetPose(self, pose, ignore_collison):
+        #logging.warning("simSetPose API is renamed to simSetVehiclePose. Please update your code." + self.upgrade_api_help)
+        return self.simSetVehiclePose(pose, ignore_collison)
+    def getCollisionInfo(self):
+        #logging.warning("getCollisionInfo API is renamed to simGetCollisionInfo. Please update your code." + self.upgrade_api_help)
+        return self.simGetCollisionInfo()
+    def getCameraInfo(self, camera_id):
+        #logging.warning("getCameraInfo API is renamed to simGetCameraInfo. Please update your code." + self.upgrade_api_help)
+        return self.simGetCameraInfo(camera_id)
+    def setCameraOrientation(self, camera_id, orientation):
+        #logging.warning("setCameraOrientation API is renamed to simSetCameraOrientation. Please update your code." + self.upgrade_api_help)
+        return self.simSetCameraOrientation(camera_id, orientation)
+    def getPosition(self):
+        #logging.warning("getPosition API is deprecated. For ground-truth please use simGetGroundTruthKinematics() API." + self.upgrade_api_help)
+        return self.simGetGroundTruthKinematics().position
+    def getVelocity(self):
+        #logging.warning("getVelocity API is deprecated. For ground-truth please use simGetGroundTruthKinematics() API." + self.upgrade_api_help)
+        return self.simGetGroundTruthKinematics().linear_velocity
+    def getOrientation(self):
+        #logging.warning("getOrientation API is deprecated. For ground-truth please use simGetGroundTruthKinematics() API." + self.upgrade_api_help)
+        return self.simGetGroundTruthKinematics().orientation
+    def getPitchRollYaw(self):
+        return self.toEulerianAngle(self.getOrientation())
+    def getLandedState(self):
+        raise Exception("getLandedState API is deprecated. Please use getMultirotorState() API")
+    def getGpsLocation(self):
+        #logging.warning("getGpsLocation API is deprecated. For ground-truth please use simGetGroundTruthKinematics() API." + self.upgrade_api_help)
+        return self.simGetGroundTruthEnvironment().geo_point
+    def takeoff(self, max_wait_seconds = 15):
+        raise Exception("takeoff API is deprecated. Please use takeoffAsync() API." + self.upgrade_api_help)
+    def land(self, max_wait_seconds = 60):
+        raise Exception("land API is deprecated. Please use landAsync() API." + self.upgrade_api_help)
+    def goHome(self):
+        raise Exception("goHome API is deprecated. Please use goHomeAsync() API." + self.upgrade_api_help)
+    def hover(self):
+        raise Exception("hover API is deprecated. Please use hoverAsync() API." + self.upgrade_api_help)
+    def moveByAngleZ(self, pitch, roll, z, yaw, duration):
+        raise Exception("moveByAngleZ API is deprecated. Please use moveByAngleZAsync() API." + self.upgrade_api_help)
+    def moveByAngleThrottle(self, pitch, roll, throttle, yaw_rate, duration):
+        raise Exception("moveByAngleThrottle API is deprecated. Please use moveByAngleThrottleAsync() API." + self.upgrade_api_help)
+    def moveByVelocity(self, vx, vy, vz, duration, drivetrain = DrivetrainType.MaxDegreeOfFreedom, yaw_mode = YawMode()):
+        raise Exception("moveByVelocity API is deprecated. Please use moveByVelocityAsync() API." + self.upgrade_api_help)
+    def moveByVelocityZ(self, vx, vy, z, duration, drivetrain = DrivetrainType.MaxDegreeOfFreedom, yaw_mode = YawMode()):
+        raise Exception("moveByVelocityZ API is deprecated. Please use moveByVelocityZAsync() API." + self.upgrade_api_help)
+    def moveOnPath(self, path, velocity, max_wait_seconds = 60, drivetrain = DrivetrainType.MaxDegreeOfFreedom, yaw_mode = YawMode(), lookahead = -1, adaptive_lookahead = 1):
+        raise Exception("moveOnPath API is deprecated. Please use moveOnPathAsync() API." + self.upgrade_api_help)
+    def moveToZ(self, z, velocity, max_wait_seconds = 60, yaw_mode = YawMode(), lookahead = -1, adaptive_lookahead = 1):
+        raise Exception("moveToZ API is deprecated. Please use moveToZAsync() API." + self.upgrade_api_help)
+    def moveToPosition(self, x, y, z, velocity, max_wait_seconds = 60, drivetrain = DrivetrainType.MaxDegreeOfFreedom, yaw_mode = YawMode(), lookahead = -1, adaptive_lookahead = 1):
+        raise Exception("moveToPosition API is deprecated. Please use moveToPositionAsync() API." + self.upgrade_api_help)
+    def moveByManual(self, vx_max, vy_max, z_min, duration, drivetrain = DrivetrainType.MaxDegreeOfFreedom, yaw_mode = YawMode()):
+        raise Exception("moveByManual API is deprecated. Please use moveByManualAsync() API." + self.upgrade_api_help)
+    def rotateToYaw(self, yaw, max_wait_seconds = 60, margin = 5):
+        raise Exception("rotateToYaw API is deprecated. Please use rotateToYawAsync() API." + self.upgrade_api_help)
+    def rotateByYawRate(self, yaw_rate, duration):
+        raise Exception("rotateByYawRate API is deprecated. Please use rotateByYawRateAsync() API." + self.upgrade_api_help)
+    def setRCData(self, rcdata = RCData()):
+        raise Exception("setRCData API is deprecated. Please use moveByRC() API." + self.upgrade_api_help)
 
 #Plotting APIs
     def simFlushPersistentMarkers(self):
@@ -1226,9 +1341,15 @@ class MultirotorClient(VehicleClient, object):
         lookahead = -1, adaptive_lookahead = 1, vehicle_name = ''):
         return self.client.call_async('moveToPosition', x, y, z, velocity, timeout_sec, drivetrain, yaw_mode, lookahead, adaptive_lookahead, vehicle_name)
 
+
     def moveToGPSAsync(self, latitude, longitude, altitude, velocity, timeout_sec = 3e+38, drivetrain = DrivetrainType.MaxDegreeOfFreedom, yaw_mode = YawMode(),
         lookahead = -1, adaptive_lookahead = 1, vehicle_name = ''):
         return self.client.call_async('moveToGPS', latitude, longitude, altitude, velocity, timeout_sec, drivetrain, yaw_mode, lookahead, adaptive_lookahead, vehicle_name)
+
+
+    def getTripStats(self, vehicle_name=''):
+        trip_stats_raw =  self.client.call('getTripStats', vehicle_name)
+        return TripStats.from_msgpack(trip_stats_raw)
 
     def moveToZAsync(self, z, velocity, timeout_sec = 3e+38, yaw_mode = YawMode(), lookahead = -1, adaptive_lookahead = 1, vehicle_name = ''):
         return self.client.call_async('moveToZ', z, velocity, timeout_sec, yaw_mode, lookahead, adaptive_lookahead, vehicle_name)

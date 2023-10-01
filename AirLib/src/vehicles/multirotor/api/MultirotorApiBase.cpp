@@ -801,6 +801,7 @@ namespace airlib
         return true;
     }
 
+
     bool MultirotorApiBase::emergencyManeuverIfUnsafe(const SafetyEval::EvalResult& result)
     {
         if (!result.is_safe) {
